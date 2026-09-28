@@ -1,0 +1,189 @@
+import { GoogleGenAI, Type } from '@google/genai';
+
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    const { reportText, fileBase64, mimeType, patientContext } = req.body || {};
+
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = [];
+
+    if (fileBase64 && mimeType) {
+      parts.push({
+        inlineData: {
+          data: fileBase64,
+          mimeType,
+        },
+      });
+    }
+
+    const promptText = `You are a clinical biomarker analyst and preventive medicine nutritionist.
+Analyze the provided health lab report and patient context, then produce a structured JSON response containing:
+1. Extracted biomarkers with exact numeric values, units, reference ranges, status ("Normal", "Borderline", or "Attention"), organSystem ("Metabolic", "Cardiovascular", "Micronutrient", "Thyroid & Hepatic"), plain-English clinicalInsight, and rootCauseMechanism.
+2. Overall clinical condition summary and biological priority focus.
+3. Personalized Chrono-Nutrition Diet Protocol (4 timed daily meals where each meal specifically targets the out-of-range biomarkers with exact nutrient pairings and bioavailability notes).
+4. Personalized Movement & Exercise Prescription (3 targeted training sessions calibrated to the patient's cardiovascular, glycemic, and inflammatory markers, including heart rate zone, duration, and joint/fatigue guardrails).
+5. Recommended Medication & Supplement Circadian Schedule (with exact timing, food/absorption synergy, and drug-nutrient conflict warnings).
+6. Recommended Specialist Type and Diagnostic Follow-up based on the findings.
+
+Patient Context: ${patientContext || 'Adult preventive diagnostic panel'}
+Lab Report Content: ${reportText || 'Analyze the attached diagnostic report image/document.'}`;
+
+    parts.push({ text: promptText });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: { parts },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            reportTitle: { type: Type.STRING },
+            summaryHeadline: { type: Type.STRING },
+            conditionOverview: { type: Type.STRING },
+            recommendedSpecialistCategory: { type: Type.STRING },
+            biomarkers: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  name: { type: Type.STRING },
+                  value: { type: Type.NUMBER },
+                  unit: { type: Type.STRING },
+                  referenceRange: { type: Type.STRING },
+                  status: { type: Type.STRING },
+                  organSystem: { type: Type.STRING },
+                  clinicalInsight: { type: Type.STRING },
+                  targetAction: { type: Type.STRING },
+                },
+                required: [
+                  'id',
+                  'name',
+                  'value',
+                  'unit',
+                  'referenceRange',
+                  'status',
+                  'organSystem',
+                  'clinicalInsight',
+                  'targetAction',
+                ],
+              },
+            },
+            dietPlan: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  timeWindow: { type: Type.STRING },
+                  mealName: { type: Type.STRING },
+                  dishTitle: { type: Type.STRING },
+                  targetedBiomarkers: { type: Type.STRING },
+                  macros: { type: Type.STRING },
+                  bioavailabilityRule: { type: Type.STRING },
+                  ingredients: { type: Type.STRING },
+                },
+                required: [
+                  'id',
+                  'timeWindow',
+                  'mealName',
+                  'dishTitle',
+                  'targetedBiomarkers',
+                  'macros',
+                  'bioavailabilityRule',
+                  'ingredients',
+                ],
+              },
+            },
+            exercisePlan: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  sessionTitle: { type: Type.STRING },
+                  cadence: { type: Type.STRING },
+                  durationMinutes: { type: Type.NUMBER },
+                  heartRateZone: { type: Type.STRING },
+                  targetedBiomarkerMechanism: { type: Type.STRING },
+                  protocolSteps: { type: Type.STRING },
+                  safetyGuardrail: { type: Type.STRING },
+                },
+                required: [
+                  'id',
+                  'sessionTitle',
+                  'cadence',
+                  'durationMinutes',
+                  'heartRateZone',
+                  'targetedBiomarkerMechanism',
+                  'protocolSteps',
+                  'safetyGuardrail',
+                ],
+              },
+            },
+            suggestedMedications: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  dosage: { type: Type.STRING },
+                  scheduledTime: { type: Type.STRING },
+                  circadianWindow: { type: Type.STRING },
+                  foodInstruction: { type: Type.STRING },
+                  interactionWarning: { type: Type.STRING },
+                  linkedBiomarker: { type: Type.STRING },
+                },
+                required: [
+                  'name',
+                  'dosage',
+                  'scheduledTime',
+                  'circadianWindow',
+                  'foodInstruction',
+                  'interactionWarning',
+                  'linkedBiomarker',
+                ],
+              },
+            },
+          },
+          required: [
+            'reportTitle',
+            'summaryHeadline',
+            'conditionOverview',
+            'recommendedSpecialistCategory',
+            'biomarkers',
+            'dietPlan',
+            'exercisePlan',
+            'suggestedMedications',
+          ],
+        },
+      },
+    });
+
+    const text = response.text;
+    if (!text) {
+      res.status(500).json({ error: 'Empty response from clinical analysis model.' });
+      return;
+    }
+
+    const parsed = JSON.parse(text.trim());
+    res.status(200).json(parsed);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to analyze health report.';
+    res.status(500).json({ error: message });
+  }
+}
