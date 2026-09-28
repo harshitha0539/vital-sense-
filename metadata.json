@@ -1,0 +1,6 @@
+{
+  "name": "Vitalsense Clinical Intelligence",
+  "description": "Biomarker-driven health report analyzer, adaptive nutrition and exercise planner, circadian medication alert system, and transparent hospital and specialist cost comparator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
