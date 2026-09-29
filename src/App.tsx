@@ -27,6 +27,7 @@ import {
   SPECIALIST_HOSPITALS,
   patientAvatarUrl,
 } from './data/initialData';
+import { N8nChatWidget } from './components/N8nChatWidget';
 
 type ActiveSection = 'report' | 'protocol' | 'medications' | 'hospitals';
 
@@ -1531,6 +1532,9 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Floating n8n Clinical AI Chatbot */}
+      <N8nChatWidget reportData={reportData} />
     </div>
   );
 }

@@ -199,6 +199,49 @@ Lab Report Content: ${reportText || 'Analyze the attached diagnostic report imag
     }
   });
 
+  app.post('/api/n8n-chat', async (req, res) => {
+    try {
+      const { chatInput, sessionId, action = 'sendMessage', metadata } = req.body || {};
+      const n8nUrl =
+        'https://harshitha39.app.n8n.cloud/webhook/90bab5af-e28b-4460-b3b3-40029d90c209/chat';
+
+      const response = await fetch(n8nUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json, text/plain, */*',
+        },
+        body: JSON.stringify({
+          action,
+          sessionId: sessionId || 'vitalsense-session-1',
+          chatInput: chatInput || '',
+          metadata: metadata || {},
+        }),
+      });
+
+      const rawText = await response.text();
+      let data: unknown = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { output: rawText };
+      }
+
+      if (!response.ok) {
+        res.status(response.status).json({
+          error: `n8n webhook returned status ${response.status}`,
+          details: data,
+        });
+        return;
+      }
+
+      res.json(data);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to connect to n8n chatbot.';
+      res.status(500).json({ error: message });
+    }
+  });
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
